@@ -629,6 +629,7 @@ function ScheduleEditor({
       onOpenChange={(v) => {
         if (!v) {
           setDraft({});
+          setConfirmConflicts(false);
           onClose();
         }
       }}
@@ -657,8 +658,16 @@ function ScheduleEditor({
         <div className="space-y-2">
           {PERIODS.map((p) => {
             const v = valueFor(p);
+            const hasConflict = conflicts.some((c) =>
+              c.message.startsWith(`${editDay} ${p}:`),
+            );
             return (
-              <div key={p} className="rounded-xl border border-border p-2">
+              <div
+                key={p}
+                className={`rounded-xl border p-2 ${
+                  hasConflict ? "border-destructive bg-destructive/5" : "border-border"
+                }`}
+              >
                 <p className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">
                   {p}
                 </p>
@@ -678,9 +687,34 @@ function ScheduleEditor({
             );
           })}
         </div>
-        <Button onClick={() => save.mutate()} disabled={save.isPending}>
-          Save schedule
+
+        {conflicts.length > 0 && (
+          <div className="rounded-xl border border-destructive bg-destructive/10 p-3">
+            <p className="text-xs font-bold text-destructive">
+              {conflicts.length} conflict{conflicts.length > 1 ? "s" : ""} detected
+            </p>
+            <ul className="mt-1 space-y-1">
+              {conflicts.map((c, i) => (
+                <li key={i} className="text-[11px] text-destructive">
+                  • {c.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <Button
+          onClick={attemptSave}
+          disabled={save.isPending}
+          variant={conflicts.length > 0 && confirmConflicts ? "destructive" : "default"}
+        >
+          {conflicts.length > 0
+            ? confirmConflicts
+              ? "Save anyway"
+              : "Check & save schedule"
+            : "Save schedule"}
         </Button>
+
       </DialogContent>
     </Dialog>
   );
