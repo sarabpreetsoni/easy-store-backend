@@ -108,3 +108,58 @@ export function getFreeTeachers(
     return freePeriods - subsToday > 0;
   });
 }
+
+export type DraftSlot = {
+  day: string;
+  period: string;
+  class_name: string;
+  subject: string;
+};
+
+export type Conflict = { kind: "class" | "substitution"; message: string };
+
+/**
+ * Detect scheduling conflicts for a teacher's pending schedule changes:
+ * - another teacher already assigned to the same class/room in that day+period
+ * - the teacher is already covering a substitution in that day+period
+ */
+export function findConflicts(
+  data: TimetableData,
+  teacherId: string,
+  drafts: DraftSlot[],
+): Conflict[] {
+  const conflicts: Conflict[] = [];
+  const nameOf = (id: string) =>
+    data.teachers.find((t) => t.id === id)?.name ?? "Another teacher";
+
+  for (const d of drafts) {
+    const className = d.class_name.trim();
+    if (!className) continue;
+
+    for (const s of data.slots) {
+      if (s.teacher_id === teacherId) continue;
+      if (s.day !== d.day || s.period !== d.period) continue;
+      if (s.class_name.trim().toLowerCase() !== className.toLowerCase()) continue;
+      conflicts.push({
+        kind: "class",
+        message: `${d.day} ${d.period}: ${className} is already taken by ${nameOf(
+          s.teacher_id,
+        )} (${s.subject || "no subject"}).`,
+      });
+    }
+
+    const sub = data.substitutions.find(
+      (s) => s.day === d.day && s.period === d.period && s.sub_teacher_id === teacherId,
+    );
+    if (sub) {
+      conflicts.push({
+        kind: "substitution",
+        message: `${d.day} ${d.period}: already covering a substitution for ${nameOf(
+          sub.absent_teacher_id,
+        )}.`,
+      });
+    }
+  }
+
+  return conflicts;
+}
