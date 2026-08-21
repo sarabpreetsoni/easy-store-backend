@@ -61,6 +61,37 @@ function Index() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
 
+  // Live updates: refetch whenever any other user changes timetable data.
+  useEffect(() => {
+    const channel = supabase
+      .channel("timetable-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "teachers" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "schedule_slots" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leaves" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "substitutions" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   if (error) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
