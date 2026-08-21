@@ -115,9 +115,27 @@ function Index() {
             </h1>
             <p className="text-[11px] opacity-80">Cloud-synced staff scheduling</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setStaffOpen(true)}>
-            Staff
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!data}
+              onClick={() => data && exportTimetableCsv(data)}
+            >
+              CSV
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!data}
+              onClick={() => data && exportTimetablePdf(data)}
+            >
+              PDF
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setStaffOpen(true)}>
+              Staff
+            </Button>
+          </div>
         </div>
       </header>
 
