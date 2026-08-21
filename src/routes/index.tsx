@@ -7,14 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   DAYS,
   PERIODS,
+  fetchAdjustmentHistory,
   fetchTimetable,
   findConflicts,
   getFreeTeachers,
   indexSlots,
+  logAdjustment,
   slotKey,
   type Conflict,
   type TimetableData,
 } from "@/lib/timetable";
+import { exportTimetableCsv, exportTimetablePdf } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
