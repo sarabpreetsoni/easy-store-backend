@@ -571,19 +571,31 @@ function ScheduleEditor({
     setDraft((prev) => ({ ...prev, [key]: { ...valueFor(period), ...patch } }));
   };
 
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!teacher) return;
-      const rows = Object.entries(draft).map(([key, value]) => {
+  const draftRows = useMemo(
+    () =>
+      Object.entries(draft).map(([key, value]) => {
         const [d, p] = key.split("|");
         return {
-          teacher_id: teacher.id,
           day: d!,
           period: p!,
           class_name: value.class_name,
           subject: value.subject,
         };
-      });
+      }),
+    [draft],
+  );
+
+  const conflicts: Conflict[] = useMemo(
+    () => (teacher ? findConflicts(data, teacher.id, draftRows) : []),
+    [data, teacher, draftRows],
+  );
+
+  const [confirmConflicts, setConfirmConflicts] = useState(false);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!teacher) return;
+      const rows = draftRows.map((r) => ({ teacher_id: teacher.id, ...r }));
       if (rows.length === 0) return;
       const { error } = await supabase
         .from("schedule_slots")
@@ -593,11 +605,23 @@ function ScheduleEditor({
     onSuccess: () => {
       toast.success("Schedule saved");
       setDraft({});
+      setConfirmConflicts(false);
       refresh();
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const attemptSave = () => {
+    if (conflicts.length > 0 && !confirmConflicts) {
+      setConfirmConflicts(true);
+      toast.warning(
+        `${conflicts.length} scheduling conflict${conflicts.length > 1 ? "s" : ""} found`,
+      );
+      return;
+    }
+    save.mutate();
+  };
 
   return (
     <Dialog
