@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -8,9 +8,11 @@ import {
   DAYS,
   PERIODS,
   fetchTimetable,
+  findConflicts,
   getFreeTeachers,
   indexSlots,
   slotKey,
+  type Conflict,
   type TimetableData,
 } from "@/lib/timetable";
 import { Button } from "@/components/ui/button";
