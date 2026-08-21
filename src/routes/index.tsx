@@ -7,14 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   DAYS,
   PERIODS,
+  fetchAdjustmentHistory,
   fetchTimetable,
   findConflicts,
   getFreeTeachers,
   indexSlots,
+  logAdjustment,
   slotKey,
   type Conflict,
   type TimetableData,
 } from "@/lib/timetable";
+import { exportTimetableCsv, exportTimetablePdf } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -112,9 +115,27 @@ function Index() {
             </h1>
             <p className="text-[11px] opacity-80">Cloud-synced staff scheduling</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setStaffOpen(true)}>
-            Staff
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!data}
+              onClick={() => data && exportTimetableCsv(data)}
+            >
+              CSV
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!data}
+              onClick={() => data && exportTimetablePdf(data)}
+            >
+              PDF
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setStaffOpen(true)}>
+              Staff
+            </Button>
+          </div>
         </div>
       </header>
 

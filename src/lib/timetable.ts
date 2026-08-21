@@ -163,3 +163,42 @@ export function findConflicts(
 
   return conflicts;
 }
+
+export type AdjustmentHistoryEntry = {
+  id: string;
+  day: string;
+  period: string;
+  absent_teacher_name: string;
+  sub_teacher_name: string;
+  class_name: string;
+  subject: string;
+  action: string;
+  created_at: string;
+};
+
+/** Adjustment (substitution) log for the last 7 days. */
+export async function fetchAdjustmentHistory(): Promise<AdjustmentHistoryEntry[]> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("adjustment_history")
+    .select(
+      "id,day,period,absent_teacher_name,sub_teacher_name,class_name,subject,action,created_at",
+    )
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function logAdjustment(entry: {
+  day: string;
+  period: string;
+  absent_teacher_name: string;
+  sub_teacher_name: string;
+  class_name: string;
+  subject: string;
+  action: "assigned" | "removed";
+}) {
+  await supabase.from("adjustment_history").insert(entry);
+}
