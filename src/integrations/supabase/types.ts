@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      adjustment_history: {
+        Row: {
+          absent_teacher_name: string
+          action: string
+          class_name: string
+          created_at: string
+          day: string
+          id: string
+          period: string
+          sub_teacher_name: string
+          subject: string
+        }
+        Insert: {
+          absent_teacher_name?: string
+          action?: string
+          class_name?: string
+          created_at?: string
+          day: string
+          id?: string
+          period: string
+          sub_teacher_name?: string
+          subject?: string
+        }
+        Update: {
+          absent_teacher_name?: string
+          action?: string
+          class_name?: string
+          created_at?: string
+          day?: string
+          id?: string
+          period?: string
+          sub_teacher_name?: string
+          subject?: string
+        }
+        Relationships: []
+      }
       leaves: {
         Row: {
           created_at: string
