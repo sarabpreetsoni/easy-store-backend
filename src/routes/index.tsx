@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -8,9 +8,11 @@ import {
   DAYS,
   PERIODS,
   fetchTimetable,
+  findConflicts,
   getFreeTeachers,
   indexSlots,
   slotKey,
+  type Conflict,
   type TimetableData,
 } from "@/lib/timetable";
 import { Button } from "@/components/ui/button";
@@ -58,6 +60,37 @@ function Index() {
   const [editorTeacher, setEditorTeacher] = useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
+
+  // Live updates: refetch whenever any other user changes timetable data.
+  useEffect(() => {
+    const channel = supabase
+      .channel("timetable-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "teachers" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "schedule_slots" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leaves" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "substitutions" },
+        () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY }),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   if (error) {
     return (
@@ -538,19 +571,31 @@ function ScheduleEditor({
     setDraft((prev) => ({ ...prev, [key]: { ...valueFor(period), ...patch } }));
   };
 
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!teacher) return;
-      const rows = Object.entries(draft).map(([key, value]) => {
+  const draftRows = useMemo(
+    () =>
+      Object.entries(draft).map(([key, value]) => {
         const [d, p] = key.split("|");
         return {
-          teacher_id: teacher.id,
           day: d!,
           period: p!,
           class_name: value.class_name,
           subject: value.subject,
         };
-      });
+      }),
+    [draft],
+  );
+
+  const conflicts: Conflict[] = useMemo(
+    () => (teacher ? findConflicts(data, teacher.id, draftRows) : []),
+    [data, teacher, draftRows],
+  );
+
+  const [confirmConflicts, setConfirmConflicts] = useState(false);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!teacher) return;
+      const rows = draftRows.map((r) => ({ teacher_id: teacher.id, ...r }));
       if (rows.length === 0) return;
       const { error } = await supabase
         .from("schedule_slots")
@@ -560,11 +605,23 @@ function ScheduleEditor({
     onSuccess: () => {
       toast.success("Schedule saved");
       setDraft({});
+      setConfirmConflicts(false);
       refresh();
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const attemptSave = () => {
+    if (conflicts.length > 0 && !confirmConflicts) {
+      setConfirmConflicts(true);
+      toast.warning(
+        `${conflicts.length} scheduling conflict${conflicts.length > 1 ? "s" : ""} found`,
+      );
+      return;
+    }
+    save.mutate();
+  };
 
   return (
     <Dialog
@@ -572,6 +629,7 @@ function ScheduleEditor({
       onOpenChange={(v) => {
         if (!v) {
           setDraft({});
+          setConfirmConflicts(false);
           onClose();
         }
       }}
@@ -600,8 +658,16 @@ function ScheduleEditor({
         <div className="space-y-2">
           {PERIODS.map((p) => {
             const v = valueFor(p);
+            const hasConflict = conflicts.some((c) =>
+              c.message.startsWith(`${editDay} ${p}:`),
+            );
             return (
-              <div key={p} className="rounded-xl border border-border p-2">
+              <div
+                key={p}
+                className={`rounded-xl border p-2 ${
+                  hasConflict ? "border-destructive bg-destructive/5" : "border-border"
+                }`}
+              >
                 <p className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">
                   {p}
                 </p>
@@ -621,9 +687,34 @@ function ScheduleEditor({
             );
           })}
         </div>
-        <Button onClick={() => save.mutate()} disabled={save.isPending}>
-          Save schedule
+
+        {conflicts.length > 0 && (
+          <div className="rounded-xl border border-destructive bg-destructive/10 p-3">
+            <p className="text-xs font-bold text-destructive">
+              {conflicts.length} conflict{conflicts.length > 1 ? "s" : ""} detected
+            </p>
+            <ul className="mt-1 space-y-1">
+              {conflicts.map((c, i) => (
+                <li key={i} className="text-[11px] text-destructive">
+                  • {c.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <Button
+          onClick={attemptSave}
+          disabled={save.isPending}
+          variant={conflicts.length > 0 && confirmConflicts ? "destructive" : "default"}
+        >
+          {conflicts.length > 0
+            ? confirmConflicts
+              ? "Save anyway"
+              : "Check & save schedule"
+            : "Save schedule"}
         </Button>
+
       </DialogContent>
     </Dialog>
   );
