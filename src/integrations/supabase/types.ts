@@ -14,7 +14,136 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      leaves: {
+        Row: {
+          created_at: string
+          day: string
+          id: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          id?: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          id?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leaves_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_slots: {
+        Row: {
+          class_name: string
+          day: string
+          id: string
+          period: string
+          subject: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          class_name?: string
+          day: string
+          id?: string
+          period: string
+          subject?: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          class_name?: string
+          day?: string
+          id?: string
+          period?: string
+          subject?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_slots_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      substitutions: {
+        Row: {
+          absent_teacher_id: string
+          created_at: string
+          day: string
+          id: string
+          period: string
+          sub_teacher_id: string
+        }
+        Insert: {
+          absent_teacher_id: string
+          created_at?: string
+          day: string
+          id?: string
+          period: string
+          sub_teacher_id: string
+        }
+        Update: {
+          absent_teacher_id?: string
+          created_at?: string
+          day?: string
+          id?: string
+          period?: string
+          sub_teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "substitutions_absent_teacher_id_fkey"
+            columns: ["absent_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substitutions_sub_teacher_id_fkey"
+            columns: ["sub_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teachers: {
+        Row: {
+          created_at: string
+          default_subject: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          default_subject?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          default_subject?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
