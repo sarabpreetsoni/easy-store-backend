@@ -62,7 +62,10 @@ function Index() {
   const [staffOpen, setStaffOpen] = useState(false);
   const [editorTeacher, setEditorTeacher] = useState<string | null>(null);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
+    queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
+  };
 
   // Live updates: refetch whenever any other user changes timetable data.
   useEffect(() => {
