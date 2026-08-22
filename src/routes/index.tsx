@@ -768,3 +768,57 @@ function ScheduleEditor({
     </Dialog>
   );
 }
+
+function AdjustmentHistory() {
+  const { data: history } = useQuery({
+    queryKey: HISTORY_KEY,
+    queryFn: fetchAdjustmentHistory,
+  });
+
+  return (
+    <Card
+      title="Adjustment history"
+      right={
+        <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+          Last 7 days
+        </span>
+      }
+    >
+      <div className="space-y-2">
+        {(history ?? []).map((h) => (
+          <div
+            key={h.id}
+            className="flex items-start justify-between gap-3 rounded-xl border border-border p-2.5"
+          >
+            <div>
+              <p className="text-xs font-bold">
+                {h.day} {h.period} · {h.class_name || "—"}
+                {h.subject ? ` (${h.subject})` : ""}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {h.action === "removed"
+                  ? `Cover removed for ${h.absent_teacher_name}${
+                      h.sub_teacher_name ? ` (was ${h.sub_teacher_name})` : ""
+                    }`
+                  : `${h.sub_teacher_name} covering ${h.absent_teacher_name}`}
+              </p>
+            </div>
+            <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+              {new Date(h.created_at).toLocaleString(undefined, {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        ))}
+        {(history ?? []).length === 0 && (
+          <p className="p-4 text-center text-xs text-muted-foreground">
+            No adjustments recorded in the last 7 days.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
