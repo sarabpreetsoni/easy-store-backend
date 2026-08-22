@@ -330,7 +330,19 @@ function DayBoard({
       absentId: string;
       subId: string | null;
     }) => {
+      const slot = slotMap.get(slotKey(v.absentId, day, v.period));
+      const base = {
+        day,
+        period: v.period,
+        absent_teacher_name: teacherName(v.absentId),
+        class_name: slot?.class_name ?? "",
+        subject: slot?.subject ?? "",
+      };
+
       if (!v.subId) {
+        const previous = data.substitutions.find(
+          (s) => s.day === day && s.period === v.period && s.absent_teacher_id === v.absentId,
+        );
         const { error } = await supabase
           .from("substitutions")
           .delete()
@@ -338,6 +350,11 @@ function DayBoard({
           .eq("period", v.period)
           .eq("absent_teacher_id", v.absentId);
         if (error) throw error;
+        await logAdjustment({
+          ...base,
+          sub_teacher_name: previous ? teacherName(previous.sub_teacher_id) : "",
+          action: "removed",
+        });
         return;
       }
       const { error } = await supabase.from("substitutions").upsert(
@@ -350,6 +367,11 @@ function DayBoard({
         { onConflict: "day,period,absent_teacher_id" },
       );
       if (error) throw error;
+      await logAdjustment({
+        ...base,
+        sub_teacher_name: teacherName(v.subId),
+        action: "assigned",
+      });
     },
     onSuccess: refresh,
     onError: (e: Error) => toast.error(e.message),
