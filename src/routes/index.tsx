@@ -50,6 +50,7 @@ export const Route = createFileRoute("/")({
 });
 
 const TIMETABLE_KEY = ["timetable"];
+const HISTORY_KEY = ["adjustment-history"];
 
 function Index() {
   const queryClient = useQueryClient();
