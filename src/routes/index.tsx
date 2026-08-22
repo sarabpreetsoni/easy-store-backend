@@ -175,6 +175,8 @@ function Index() {
             <DayBoard data={data} day={day} refresh={refresh} />
           </div>
         )}
+
+        <AdjustmentHistory />
       </main>
 
       {data && (
