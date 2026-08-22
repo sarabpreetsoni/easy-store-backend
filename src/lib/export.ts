@@ -1,6 +1,3 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-
 import { DAYS, PERIODS, indexSlots, slotKey, type TimetableData } from "@/lib/timetable";
 
 function cellText(data: TimetableData, teacherId: string, day: string, period: string) {
@@ -62,7 +59,11 @@ export function exportTimetableCsv(data: TimetableData) {
   );
 }
 
-export function exportTimetablePdf(data: TimetableData) {
+export async function exportTimetablePdf(data: TimetableData) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   doc.setFontSize(14);
   doc.text("Timetable", 40, 32);

@@ -50,6 +50,7 @@ export const Route = createFileRoute("/")({
 });
 
 const TIMETABLE_KEY = ["timetable"];
+const HISTORY_KEY = ["adjustment-history"];
 
 function Index() {
   const queryClient = useQueryClient();
@@ -62,7 +63,10 @@ function Index() {
   const [staffOpen, setStaffOpen] = useState(false);
   const [editorTeacher, setEditorTeacher] = useState<string | null>(null);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
+    queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
+  };
 
   // Live updates: refetch whenever any other user changes timetable data.
   useEffect(() => {
@@ -171,6 +175,8 @@ function Index() {
             <DayBoard data={data} day={day} refresh={refresh} />
           </div>
         )}
+
+        <AdjustmentHistory />
       </main>
 
       {data && (
@@ -330,7 +336,19 @@ function DayBoard({
       absentId: string;
       subId: string | null;
     }) => {
+      const slot = slotMap.get(slotKey(v.absentId, day, v.period));
+      const base = {
+        day,
+        period: v.period,
+        absent_teacher_name: teacherName(v.absentId),
+        class_name: slot?.class_name ?? "",
+        subject: slot?.subject ?? "",
+      };
+
       if (!v.subId) {
+        const previous = data.substitutions.find(
+          (s) => s.day === day && s.period === v.period && s.absent_teacher_id === v.absentId,
+        );
         const { error } = await supabase
           .from("substitutions")
           .delete()
@@ -338,6 +356,11 @@ function DayBoard({
           .eq("period", v.period)
           .eq("absent_teacher_id", v.absentId);
         if (error) throw error;
+        await logAdjustment({
+          ...base,
+          sub_teacher_name: previous ? teacherName(previous.sub_teacher_id) : "",
+          action: "removed",
+        });
         return;
       }
       const { error } = await supabase.from("substitutions").upsert(
@@ -350,6 +373,11 @@ function DayBoard({
         { onConflict: "day,period,absent_teacher_id" },
       );
       if (error) throw error;
+      await logAdjustment({
+        ...base,
+        sub_teacher_name: teacherName(v.subId),
+        action: "assigned",
+      });
     },
     onSuccess: refresh,
     onError: (e: Error) => toast.error(e.message),
@@ -738,5 +766,59 @@ function ScheduleEditor({
 
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AdjustmentHistory() {
+  const { data: history } = useQuery({
+    queryKey: HISTORY_KEY,
+    queryFn: fetchAdjustmentHistory,
+  });
+
+  return (
+    <Card
+      title="Adjustment history"
+      right={
+        <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+          Last 7 days
+        </span>
+      }
+    >
+      <div className="space-y-2">
+        {(history ?? []).map((h) => (
+          <div
+            key={h.id}
+            className="flex items-start justify-between gap-3 rounded-xl border border-border p-2.5"
+          >
+            <div>
+              <p className="text-xs font-bold">
+                {h.day} {h.period} · {h.class_name || "—"}
+                {h.subject ? ` (${h.subject})` : ""}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {h.action === "removed"
+                  ? `Cover removed for ${h.absent_teacher_name}${
+                      h.sub_teacher_name ? ` (was ${h.sub_teacher_name})` : ""
+                    }`
+                  : `${h.sub_teacher_name} covering ${h.absent_teacher_name}`}
+              </p>
+            </div>
+            <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+              {new Date(h.created_at).toLocaleString(undefined, {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        ))}
+        {(history ?? []).length === 0 && (
+          <p className="p-4 text-center text-xs text-muted-foreground">
+            No adjustments recorded in the last 7 days.
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
