@@ -191,6 +191,17 @@ export async function fetchAdjustmentHistory(): Promise<AdjustmentHistoryEntry[]
   return data ?? [];
 }
 
+/**
+ * Writes are restricted to signed-in staff by the database policies.
+ * Fail early with a friendly message instead of a raw permission error.
+ */
+export async function requireSignedIn() {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) {
+    throw new Error("Please sign in to make changes to the timetable.");
+  }
+}
+
 export async function logAdjustment(entry: {
   day: string;
   period: string;
