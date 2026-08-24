@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -13,11 +13,13 @@ import {
   getFreeTeachers,
   indexSlots,
   logAdjustment,
+  requireSignedIn,
   slotKey,
   type Conflict,
   type TimetableData,
 } from "@/lib/timetable";
 import { exportTimetableCsv, exportTimetablePdf } from "@/lib/export";
+import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -62,6 +64,7 @@ function Index() {
   const [day, setDay] = useState<string>(DAYS[0]);
   const [staffOpen, setStaffOpen] = useState(false);
   const [editorTeacher, setEditorTeacher] = useState<string | null>(null);
+  const session = useSession();
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
@@ -117,7 +120,9 @@ function Index() {
             <h1 className="font-display text-lg font-bold leading-tight">
               Timetable Manager
             </h1>
-            <p className="text-[11px] opacity-80">Cloud-synced staff scheduling</p>
+            <p className="text-[11px] opacity-80">
+              {session ? "Cloud-synced staff scheduling" : "View only — sign in to edit"}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -139,6 +144,22 @@ function Index() {
             <Button variant="secondary" size="sm" onClick={() => setStaffOpen(true)}>
               Staff
             </Button>
+            {session ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  toast.success("Signed out");
+                }}
+              >
+                Sign out
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" asChild>
+                <Link to="/auth">Sign in</Link>
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -236,6 +257,7 @@ function StaffWorkload({
 
   const toggleLeave = useMutation({
     mutationFn: async (teacherId: string) => {
+      await requireSignedIn();
       const existing = leaveFor(teacherId);
       if (existing) {
         const { error } = await supabase.from("leaves").delete().eq("id", existing.id);
@@ -336,6 +358,7 @@ function DayBoard({
       absentId: string;
       subId: string | null;
     }) => {
+      await requireSignedIn();
       const slot = slotMap.get(slotKey(v.absentId, day, v.period));
       const base = {
         day,
@@ -496,6 +519,7 @@ function StaffDialog({
 
   const addTeacher = useMutation({
     mutationFn: async () => {
+      await requireSignedIn();
       if (!name.trim()) throw new Error("Please enter a teacher name.");
       const { data: created, error } = await supabase
         .from("teachers")
@@ -527,6 +551,7 @@ function StaffDialog({
 
   const removeTeacher = useMutation({
     mutationFn: async (id: string) => {
+      await requireSignedIn();
       const { error } = await supabase.from("teachers").delete().eq("id", id);
       if (error) throw error;
     },
@@ -643,6 +668,7 @@ function ScheduleEditor({
 
   const save = useMutation({
     mutationFn: async () => {
+      await requireSignedIn();
       if (!teacher) return;
       const rows = draftRows.map((r) => ({ teacher_id: teacher.id, ...r }));
       if (rows.length === 0) return;
