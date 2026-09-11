@@ -352,6 +352,8 @@ function DayBoard({
   const teacherName = (id: string) =>
     data.teachers.find((t) => t.id === id)?.name ?? "Unknown";
 
+  const [drafts, setDrafts] = useState<Record<string, string | null>>({});
+
   const assign = useMutation({
     mutationFn: async (v: {
       period: string;
@@ -458,6 +460,10 @@ function DayBoard({
                     s.period === period &&
                     s.absent_teacher_id === gap.id,
                 );
+                const draftKey = `${period}|${gap.id}`;
+                const hasDraft = draftKey in drafts;
+                const value = hasDraft ? (drafts[draftKey] ?? "") : (current?.sub_teacher_id ?? "");
+
                 return (
                   <div
                     key={gap.id}
@@ -468,13 +474,12 @@ function DayBoard({
                       {gap.slot!.subject && `(${gap.slot!.subject})`}
                     </p>
                     <select
-                      value={current?.sub_teacher_id ?? ""}
+                      value={value}
                       onChange={(e) =>
-                        assign.mutate({
-                          period,
-                          absentId: gap.id,
-                          subId: e.target.value || null,
-                        })
+                        setDrafts((prev) => ({
+                          ...prev,
+                          [draftKey]: e.target.value || null,
+                        }))
                       }
                       className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs"
                     >
@@ -492,6 +497,40 @@ function DayBoard({
                           </option>
                         ))}
                     </select>
+                    {hasDraft && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            assign.mutate({
+                              period,
+                              absentId: gap.id,
+                              subId: drafts[draftKey] ?? null,
+                            });
+                            setDrafts((prev) => {
+                              const next = { ...prev };
+                              delete next[draftKey];
+                              return next;
+                            });
+                          }}
+                        >
+                          Confirm & Save
+                        </Button>
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline hover:text-foreground"
+                          onClick={() =>
+                            setDrafts((prev) => {
+                              const next = { ...prev };
+                              delete next[draftKey];
+                              return next;
+                            })
+                          }
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
