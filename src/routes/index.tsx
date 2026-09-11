@@ -352,59 +352,67 @@ function DayBoard({
   const teacherName = (id: string) =>
     data.teachers.find((t) => t.id === id)?.name ?? "Unknown";
 
+  // Staged drafts: key = "period|absentId", value = selected subId (or null = remove)
   const [drafts, setDrafts] = useState<Record<string, string | null>>({});
+  const hasDrafts = Object.keys(drafts).length > 0;
 
-  const assign = useMutation({
-    mutationFn: async (v: {
-      period: string;
-      absentId: string;
-      subId: string | null;
-    }) => {
+  const saveAll = useMutation({
+    mutationFn: async () => {
       await requireSignedIn();
-      const slot = slotMap.get(slotKey(v.absentId, day, v.period));
-      const base = {
-        day,
-        period: v.period,
-        absent_teacher_name: teacherName(v.absentId),
-        class_name: slot?.class_name ?? "",
-        subject: slot?.subject ?? "",
-      };
+      // Run all pending draft saves in parallel
+      await Promise.all(
+        Object.entries(drafts).map(async ([key, subId]) => {
+          const [period, absentId] = key.split("|");
+          const slot = slotMap.get(slotKey(absentId, day, period));
+          const base = {
+            day,
+            period,
+            absent_teacher_name: teacherName(absentId),
+            class_name: slot?.class_name ?? "",
+            subject: slot?.subject ?? "",
+          };
 
-      if (!v.subId) {
-        const previous = data.substitutions.find(
-          (s) => s.day === day && s.period === v.period && s.absent_teacher_id === v.absentId,
-        );
-        const { error } = await supabase
-          .from("substitutions")
-          .delete()
-          .eq("day", day)
-          .eq("period", v.period)
-          .eq("absent_teacher_id", v.absentId);
-        if (error) throw error;
-        await logAdjustment({
-          ...base,
-          sub_teacher_name: previous ? teacherName(previous.sub_teacher_id) : "",
-          action: "removed",
-        });
-        return;
-      }
-      const { error } = await supabase.from("substitutions").upsert(
-        {
-          day,
-          period: v.period,
-          absent_teacher_id: v.absentId,
-          sub_teacher_id: v.subId,
-        },
-        { onConflict: "day,period,absent_teacher_id" },
+          if (!subId) {
+            const previous = data.substitutions.find(
+              (s) => s.day === day && s.period === period && s.absent_teacher_id === absentId,
+            );
+            const { error } = await supabase
+              .from("substitutions")
+              .delete()
+              .eq("day", day)
+              .eq("period", period)
+              .eq("absent_teacher_id", absentId);
+            if (error) throw error;
+            await logAdjustment({
+              ...base,
+              sub_teacher_name: previous ? teacherName(previous.sub_teacher_id) : "",
+              action: "removed",
+            });
+          } else {
+            const { error } = await supabase.from("substitutions").upsert(
+              {
+                day,
+                period,
+                absent_teacher_id: absentId,
+                sub_teacher_id: subId,
+              },
+              { onConflict: "day,period,absent_teacher_id" },
+            );
+            if (error) throw error;
+            await logAdjustment({
+              ...base,
+              sub_teacher_name: teacherName(subId),
+              action: "assigned",
+            });
+          }
+        }),
       );
-      if (error) throw error;
-      await logAdjustment({
-        ...base,
-        sub_teacher_name: teacherName(v.subId),
-        action: "assigned",
-      });
     },
-    onSuccess: refresh,
+    onSuccess: () => {
+      setDrafts({});
+      toast.success("All substitutions saved");
+      refresh();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -460,25 +468,38 @@ function DayBoard({
                     s.period === period &&
                     s.absent_teacher_id === gap.id,
                 );
-                const draftKey = `${period}|${gap.id}`;
-                const hasDraft = draftKey in drafts;
-                const value = hasDraft ? (drafts[draftKey] ?? "") : (current?.sub_teacher_id ?? "");
+                const key = `${period}|${gap.id}`;
+                const isPending = key in drafts;
+                const value = isPending
+                  ? (drafts[key] ?? "")
+                  : (current?.sub_teacher_id ?? "");
 
                 return (
                   <div
                     key={gap.id}
-                    className="mt-2 rounded-lg border border-accent/60 bg-accent/15 p-2"
+                    className={`mt-2 rounded-lg border p-2 transition-colors ${
+                      isPending
+                        ? "border-amber-400/60 bg-amber-50/50 dark:bg-amber-900/10"
+                        : "border-accent/60 bg-accent/15"
+                    }`}
                   >
-                    <p className="text-[11px] font-bold text-accent-foreground">
-                      {teacherName(gap.id)} absent · {gap.slot!.class_name}{" "}
-                      {gap.slot!.subject && `(${gap.slot!.subject})`}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-bold text-accent-foreground">
+                        {teacherName(gap.id)} absent · {gap.slot!.class_name}{" "}
+                        {gap.slot!.subject && `(${gap.slot!.subject})`}
+                      </p>
+                      {isPending && (
+                        <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-600">
+                          unsaved
+                        </span>
+                      )}
+                    </div>
                     <select
                       value={value}
                       onChange={(e) =>
                         setDrafts((prev) => ({
                           ...prev,
-                          [draftKey]: e.target.value || null,
+                          [key]: e.target.value || null,
                         }))
                       }
                       className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs"
@@ -497,50 +518,46 @@ function DayBoard({
                           </option>
                         ))}
                     </select>
-                    {hasDraft && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            assign.mutate({
-                              period,
-                              absentId: gap.id,
-                              subId: drafts[draftKey] ?? null,
-                            });
-                            setDrafts((prev) => {
-                              const next = { ...prev };
-                              delete next[draftKey];
-                              return next;
-                            });
-                          }}
-                        >
-                          Confirm & Save
-                        </Button>
-                        <button
-                          type="button"
-                          className="text-xs text-muted-foreground underline hover:text-foreground"
-                          onClick={() =>
-                            setDrafts((prev) => {
-                              const next = { ...prev };
-                              delete next[draftKey];
-                              return next;
-                            })
-                          }
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
                   </div>
                 );
               })}
             </div>
           );
         })}
+
+        {/* ── Single Save All bar at the bottom ── */}
+        {hasDrafts && (
+          <div className="sticky bottom-2 flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 shadow-md">
+            <div className="flex-1">
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                {Object.keys(drafts).length} unsaved change{Object.keys(drafts).length > 1 ? "s" : ""}
+              </p>
+              <p className="text-[10px] text-emerald-600/70">
+                Review your selections above, then save.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline"
+              onClick={() => setDrafts({})}
+            >
+              Discard
+            </button>
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={saveAll.isPending}
+              onClick={() => saveAll.mutate()}
+            >
+              {saveAll.isPending ? "Saving…" : "Save All Changes"}
+            </Button>
+          </div>
+        )}
       </div>
     </Card>
   );
 }
+
 
 function StaffDialog({
   open,
