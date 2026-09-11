@@ -857,50 +857,133 @@ function AdjustmentHistory() {
     queryFn: fetchAdjustmentHistory,
   });
 
+  // Group entries by their timetable day (e.g. "Monday", "Tuesday"…)
+  const grouped = useMemo(() => {
+    const map = new Map<string, typeof history>();
+    for (const h of history ?? []) {
+      if (!map.has(h.day)) map.set(h.day, []);
+      map.get(h.day)!.push(h);
+    }
+    // Sort days by most recent entry within each group
+    return Array.from(map.entries()).sort(([, aEntries], [, bEntries]) => {
+      const aLatest = new Date(aEntries![0].created_at).getTime();
+      const bLatest = new Date(bEntries![0].created_at).getTime();
+      return bLatest - aLatest;
+    });
+  }, [history]);
+
+  // Track which day clusters are expanded (all open by default)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggle = (day: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(day) ? next.delete(day) : next.add(day);
+      return next;
+    });
+
   return (
     <Card
-      title="Adjustment history"
+      title="Adjustment History"
       right={
         <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase text-muted-foreground">
           Last 7 days
         </span>
       }
     >
-      <div className="space-y-2">
-        {(history ?? []).map((h) => (
-          <div
-            key={h.id}
-            className="flex items-start justify-between gap-3 rounded-xl border border-border p-2.5"
-          >
-            <div>
-              <p className="text-xs font-bold">
-                {h.day} {h.period} · {h.class_name || "—"}
-                {h.subject ? ` (${h.subject})` : ""}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {h.action === "removed"
-                  ? `Cover removed for ${h.absent_teacher_name}${
-                      h.sub_teacher_name ? ` (was ${h.sub_teacher_name})` : ""
-                    }`
-                  : `${h.sub_teacher_name} covering ${h.absent_teacher_name}`}
-              </p>
-            </div>
-            <span className="whitespace-nowrap text-[10px] text-muted-foreground">
-              {new Date(h.created_at).toLocaleString(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-          </div>
-        ))}
-        {(history ?? []).length === 0 && (
-          <p className="p-4 text-center text-xs text-muted-foreground">
-            No adjustments recorded in the last 7 days.
-          </p>
-        )}
-      </div>
+      {grouped.length === 0 ? (
+        <p className="p-4 text-center text-xs text-muted-foreground">
+          No adjustments recorded in the last 7 days.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {grouped.map(([day, entries]) => {
+            const isCollapsed = collapsed.has(day);
+            const assignedCount = (entries ?? []).filter((e) => e.action === "assigned").length;
+            const removedCount = (entries ?? []).filter((e) => e.action === "removed").length;
+
+            return (
+              <div key={day} className="overflow-hidden rounded-xl border border-border">
+                {/* Day cluster header */}
+                <button
+                  type="button"
+                  onClick={() => toggle(day)}
+                  className="flex w-full items-center justify-between gap-2 bg-muted px-4 py-2.5 text-left transition-colors hover:bg-muted/80"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-sm font-bold">{day}</span>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                      {(entries ?? []).length} change{(entries ?? []).length !== 1 ? "s" : ""}
+                    </span>
+                    {assignedCount > 0 && (
+                      <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                        {assignedCount} assigned
+                      </span>
+                    )}
+                    {removedCount > 0 && (
+                      <span className="rounded-full bg-rose-100 dark:bg-rose-900/30 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-400">
+                        {removedCount} removed
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {isCollapsed ? "▶ Show" : "▼ Hide"}
+                  </span>
+                </button>
+
+                {/* Entries */}
+                {!isCollapsed && (
+                  <div className="divide-y divide-border">
+                    {(entries ?? []).map((h) => (
+                      <div
+                        key={h.id}
+                        className="flex items-start justify-between gap-3 px-4 py-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Action pill */}
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                                h.action === "assigned"
+                                  ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                                  : "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400"
+                              }`}
+                            >
+                              {h.action}
+                            </span>
+                            <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                              {h.period}
+                            </span>
+                            <span className="text-xs font-bold truncate">
+                              {h.class_name || "—"}
+                              {h.subject ? ` (${h.subject})` : ""}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {h.action === "removed"
+                              ? `Cover removed for ${h.absent_teacher_name}${
+                                  h.sub_teacher_name ? ` · was ${h.sub_teacher_name}` : ""
+                                }`
+                              : `${h.sub_teacher_name} covering ${h.absent_teacher_name}`}
+                          </p>
+                        </div>
+                        <span className="whitespace-nowrap text-[10px] text-muted-foreground shrink-0">
+                          {new Date(h.created_at).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </Card>
   );
 }
+
