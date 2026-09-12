@@ -94,9 +94,8 @@ function csvEscape(v: string) {
 export function buildAdjustmentHistoryCsvLines(history?: AdjustmentHistoryEntry[]): string[] {
   if (!history || history.length === 0) {
     return [
-      "",
       "================================================================================",
-      "ADJUSTMENT HISTORY (LAST 7 DAYS)",
+      "DAY-WISE ADJUSTMENT HISTORY (LAST 7 DAYS)",
       "================================================================================",
       "No adjustments recorded in the last 7 days.",
     ];
@@ -104,16 +103,16 @@ export function buildAdjustmentHistoryCsvLines(history?: AdjustmentHistoryEntry[
 
   const grouped = groupHistoryByDay(history);
   const lines: string[] = [
-    "",
     "================================================================================",
-    "ADJUSTMENT HISTORY — DAY-WISE GROUPING (LAST 7 DAYS)",
+    "DAY-WISE ADJUSTMENT HISTORY (LAST 7 DAYS)",
+    `Generated: ${new Date().toLocaleString()}`,
     "================================================================================",
   ];
 
   for (const group of grouped) {
     lines.push("");
     lines.push(
-      `--- [DAY: ${group.day.toUpperCase()}] (${group.entries.length} changes: ${group.assignedCount} assigned, ${group.removedCount} removed) ---`,
+      `--- [DAY: ${group.day.toUpperCase()}] (${group.entries.length} change${group.entries.length === 1 ? "" : "s"}: ${group.assignedCount} assigned, ${group.removedCount} removed) ---`,
     );
     lines.push(
       [
@@ -124,8 +123,8 @@ export function buildAdjustmentHistoryCsvLines(history?: AdjustmentHistoryEntry[
         "Subject",
         "Absent Teacher",
         "Substitute Teacher",
-        "Summary",
-        "Timestamp",
+        "Summary / Details",
+        "Date & Time",
       ]
         .map(csvEscape)
         .join(","),
@@ -159,32 +158,18 @@ export function buildAdjustmentHistoryCsvLines(history?: AdjustmentHistoryEntry[
   return lines;
 }
 
-/** Exports timetable and day-wise grouped adjustment history in CSV */
-export function exportTimetableCsv(data: TimetableData, history?: AdjustmentHistoryEntry[]) {
-  const timetableSection = [
-    "================================================================================",
-    "TIMETABLE SCHEDULE",
-    "================================================================================",
-    TIMETABLE_HEADERS.map(csvEscape).join(","),
-    ...buildTimetableRows(data).map((r) => r.map(csvEscape).join(",")),
-  ];
-
-  const historySection = buildAdjustmentHistoryCsvLines(history);
-  const fullCsv = [...timetableSection, ...historySection].join("\n");
-
-  download(
-    `timetable-and-history-${new Date().toISOString().slice(0, 10)}.csv`,
-    new Blob([fullCsv], { type: "text/csv;charset=utf-8;" }),
-  );
-}
-
-/** Standalone export for just day-wise grouped adjustment history in CSV */
+/** Export ONLY day-wise grouped adjustment history in CSV */
 export function exportHistoryCsv(history: AdjustmentHistoryEntry[]) {
   const lines = buildAdjustmentHistoryCsvLines(history);
   download(
-    `adjustment-history-${new Date().toISOString().slice(0, 10)}.csv`,
+    `adjustment-history-day-wise-${new Date().toISOString().slice(0, 10)}.csv`,
     new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" }),
   );
+}
+
+/** Legacy alias: exports ONLY day-wise adjustment history in CSV */
+export function exportTimetableCsv(_data?: TimetableData, history?: AdjustmentHistoryEntry[]) {
+  return exportHistoryCsv(history ?? []);
 }
 
 const HISTORY_HEADERS = [
@@ -198,148 +183,7 @@ const HISTORY_HEADERS = [
   "Date & Time",
 ];
 
-/** Exports timetable and day-wise grouped adjustment history into a PDF */
-export async function exportTimetablePdf(data: TimetableData, history?: AdjustmentHistoryEntry[]) {
-  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-    import("jspdf"),
-    import("jspdf-autotable"),
-  ]);
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-  const pageHeight = doc.internal.pageSize.getHeight();
-
-  // Header Banner
-  doc.setFontSize(16);
-  doc.setTextColor(15, 76, 76);
-  doc.text("Timetable Manager", 40, 32);
-
-  doc.setFontSize(9);
-  doc.setTextColor(100, 100, 100);
-  doc.text(
-    `Generated: ${new Date().toLocaleString()}  |  Weekly Schedule & Day-Wise Adjustment History`,
-    40,
-    46,
-  );
-
-  // Section 1: Timetable Schedule
-  doc.setFontSize(12);
-  doc.setTextColor(30, 41, 59);
-  doc.text("Weekly Timetable Schedule", 40, 64);
-
-  autoTable(doc, {
-    head: [TIMETABLE_HEADERS],
-    body: buildTimetableRows(data),
-    startY: 72,
-    styles: { fontSize: 7, cellPadding: 3 },
-    headStyles: { fillColor: [15, 76, 76], textColor: [255, 255, 255] },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-  });
-
-  // Section 2: Adjustment History (Day-Wise Grouped)
-  let currentY = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 200) + 24;
-
-  if (currentY > pageHeight - 160) {
-    doc.addPage();
-    currentY = 40;
-  }
-
-  doc.setFontSize(14);
-  doc.setTextColor(15, 76, 76);
-  doc.text("Adjustment History (Day-Wise Grouping)", 40, currentY);
-  currentY += 15;
-
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text(
-    "Log of substitutions and schedule modifications for the last 7 days, grouped by day.",
-    40,
-    currentY,
-  );
-  currentY += 14;
-
-  if (!history || history.length === 0) {
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
-    doc.text("No adjustments recorded in the last 7 days.", 40, currentY + 12);
-  } else {
-    const grouped = groupHistoryByDay(history);
-
-    for (const group of grouped) {
-      if (currentY > pageHeight - 110) {
-        doc.addPage();
-        currentY = 40;
-      }
-
-      // Day group banner
-      doc.setFontSize(11);
-      doc.setTextColor(15, 76, 76);
-      doc.text(
-        `● ${group.day} — ${group.entries.length} change${group.entries.length === 1 ? "" : "s"} (${group.assignedCount} assigned, ${group.removedCount} removed)`,
-        40,
-        currentY + 10,
-      );
-      currentY += 16;
-
-      const groupRows = group.entries.map((h) => {
-        const summary =
-          h.action === "removed"
-            ? `Cover removed for ${h.absent_teacher_name}${h.sub_teacher_name ? ` (was ${h.sub_teacher_name})` : ""}`
-            : `${h.sub_teacher_name} covering for ${h.absent_teacher_name}`;
-        const dateStr = new Date(h.created_at).toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-
-        return [
-          h.period,
-          h.action.toUpperCase(),
-          h.class_name || "—",
-          h.subject || "—",
-          h.absent_teacher_name,
-          h.sub_teacher_name || "—",
-          summary,
-          dateStr,
-        ];
-      });
-
-      autoTable(doc, {
-        head: [HISTORY_HEADERS],
-        body: groupRows,
-        startY: currentY,
-        styles: { fontSize: 7, cellPadding: 3 },
-        headStyles: { fillColor: [44, 122, 123], textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        columnStyles: {
-          0: { cellWidth: 35 },
-          1: { cellWidth: 55, fontStyle: "bold" },
-          2: { cellWidth: 50 },
-          3: { cellWidth: 60 },
-          4: { cellWidth: 100 },
-          5: { cellWidth: 100 },
-          6: { cellWidth: 190 },
-          7: { cellWidth: 85 },
-        },
-        didParseCell: (hookData: { section: string; column: { index: number }; cell: { raw: unknown; styles: { textColor?: [number, number, number] } } }) => {
-          if (hookData.section === "body" && hookData.column.index === 1) {
-            const val = hookData.cell.raw;
-            if (val === "ASSIGNED") {
-              hookData.cell.styles.textColor = [16, 120, 60];
-            } else if (val === "REMOVED") {
-              hookData.cell.styles.textColor = [185, 28, 28];
-            }
-          }
-        },
-      });
-
-      currentY = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? currentY) + 18;
-    }
-  }
-
-  doc.save(`timetable-and-history-${new Date().toISOString().slice(0, 10)}.pdf`);
-}
-
-/** Standalone export for just day-wise grouped adjustment history into a PDF */
+/** Export ONLY day-wise grouped adjustment history into a PDF */
 export async function exportHistoryPdf(history: AdjustmentHistoryEntry[]) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
@@ -350,12 +194,12 @@ export async function exportHistoryPdf(history: AdjustmentHistoryEntry[]) {
 
   doc.setFontSize(16);
   doc.setTextColor(15, 76, 76);
-  doc.text("Adjustment History (Day-Wise Grouping)", 40, 32);
+  doc.text("Day-Wise Adjustment History", 40, 32);
 
   doc.setFontSize(9);
   doc.setTextColor(100, 100, 100);
   doc.text(
-    `Generated: ${new Date().toLocaleString()}  |  Last 7 Days Staff Substitutions and Leaves`,
+    `Generated: ${new Date().toLocaleString()}  |  Last 7 Days Staff Substitutions & Leave Logs (Day-Wise Grouping)`,
     40,
     46,
   );
@@ -378,7 +222,7 @@ export async function exportHistoryPdf(history: AdjustmentHistoryEntry[]) {
       doc.setFontSize(11);
       doc.setTextColor(15, 76, 76);
       doc.text(
-        `● ${group.day} — ${group.entries.length} change${group.entries.length === 1 ? "" : "s"} (${group.assignedCount} assigned, ${group.removedCount} removed)`,
+        `● ${group.day}  —  ${group.entries.length} change${group.entries.length === 1 ? "" : "s"} (${group.assignedCount} assigned, ${group.removedCount} removed)`,
         40,
         currentY + 10,
       );
@@ -441,7 +285,12 @@ export async function exportHistoryPdf(history: AdjustmentHistoryEntry[]) {
     }
   }
 
-  doc.save(`adjustment-history-${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(`adjustment-history-day-wise-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+/** Legacy alias: exports ONLY day-wise adjustment history in PDF */
+export async function exportTimetablePdf(_data?: TimetableData, history?: AdjustmentHistoryEntry[]) {
+  return exportHistoryPdf(history ?? []);
 }
 
 export { cellText };

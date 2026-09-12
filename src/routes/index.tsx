@@ -137,16 +137,18 @@ function Index() {
             <Button
               variant="secondary"
               size="sm"
-              disabled={!data}
-              onClick={() => data && exportTimetableCsv(data, history)}
+              disabled={!history}
+              onClick={() => exportHistoryCsv(history ?? [])}
+              title="Export Day-Wise Adjustment History (CSV)"
             >
               CSV
             </Button>
             <Button
               variant="secondary"
               size="sm"
-              disabled={!data}
-              onClick={() => data && exportTimetablePdf(data, history)}
+              disabled={!history}
+              onClick={() => exportHistoryPdf(history ?? [])}
+              title="Export Day-Wise Adjustment History (PDF)"
             >
               PDF
             </Button>
