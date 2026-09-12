@@ -18,7 +18,12 @@ import {
   type Conflict,
   type TimetableData,
 } from "@/lib/timetable";
-import { exportTimetableCsv, exportTimetablePdf } from "@/lib/export";
+import {
+  exportHistoryCsv,
+  exportHistoryPdf,
+  exportTimetableCsv,
+  exportTimetablePdf,
+} from "@/lib/export";
 import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +64,10 @@ function Index() {
   const { data, isLoading, error } = useQuery({
     queryKey: TIMETABLE_KEY,
     queryFn: fetchTimetable,
+  });
+  const { data: history } = useQuery({
+    queryKey: HISTORY_KEY,
+    queryFn: fetchAdjustmentHistory,
   });
 
   const [day, setDay] = useState<string>(DAYS[0]);
@@ -129,7 +138,7 @@ function Index() {
               variant="secondary"
               size="sm"
               disabled={!data}
-              onClick={() => data && exportTimetableCsv(data)}
+              onClick={() => data && exportTimetableCsv(data, history)}
             >
               CSV
             </Button>
@@ -137,7 +146,7 @@ function Index() {
               variant="secondary"
               size="sm"
               disabled={!data}
-              onClick={() => data && exportTimetablePdf(data)}
+              onClick={() => data && exportTimetablePdf(data, history)}
             >
               PDF
             </Button>
@@ -975,9 +984,29 @@ function AdjustmentHistory() {
     <Card
       title="Adjustment History"
       right={
-        <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase text-muted-foreground">
-          Last 7 days
-        </span>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[10px] font-semibold"
+            disabled={!history || history.length === 0}
+            onClick={() => history && exportHistoryCsv(history)}
+          >
+            CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[10px] font-semibold"
+            disabled={!history || history.length === 0}
+            onClick={() => history && exportHistoryPdf(history)}
+          >
+            PDF
+          </Button>
+          <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+            Last 7 days
+          </span>
+        </div>
       }
     >
       {grouped.length === 0 ? (
