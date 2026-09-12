@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -60,20 +60,31 @@ const TIMETABLE_KEY = ["timetable"];
 const HISTORY_KEY = ["adjustment-history"];
 
 function Index() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const session = useSession();
+
+  // Redirect to sign in page if unauthenticated
+  useEffect(() => {
+    if (session === null) {
+      navigate({ to: "/auth" });
+    }
+  }, [session, navigate]);
+
   const { data, isLoading, error } = useQuery({
     queryKey: TIMETABLE_KEY,
     queryFn: fetchTimetable,
+    enabled: !!session,
   });
   const { data: history } = useQuery({
     queryKey: HISTORY_KEY,
     queryFn: fetchAdjustmentHistory,
+    enabled: !!session,
   });
 
   const [day, setDay] = useState<string>(DAYS[0]);
   const [staffOpen, setStaffOpen] = useState(false);
   const [editorTeacher, setEditorTeacher] = useState<string | null>(null);
-  const session = useSession();
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: TIMETABLE_KEY });
@@ -111,6 +122,19 @@ function Index() {
     };
   }, [queryClient]);
 
+  if (session === undefined || session === null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-xs text-muted-foreground">
+            {session === undefined ? "Checking authorization…" : "Redirecting to sign in…"}
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   if (error) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
@@ -130,7 +154,7 @@ function Index() {
               Timetable Manager
             </h1>
             <p className="text-[11px] opacity-80">
-              {session ? "Cloud-synced staff scheduling" : "View only — sign in to edit"}
+              {session.user?.email ? `Signed in as ${session.user.email}` : "Cloud-synced staff scheduling"}
             </p>
           </div>
           <div className="flex gap-2">
@@ -155,22 +179,18 @@ function Index() {
             <Button variant="secondary" size="sm" onClick={() => setStaffOpen(true)}>
               Staff
             </Button>
-            {session ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  toast.success("Signed out");
-                }}
-              >
-                Sign out
-              </Button>
-            ) : (
-              <Button variant="secondary" size="sm" asChild>
-                <Link to="/auth">Sign in</Link>
-              </Button>
-            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                await supabase.auth.signOut();
+                queryClient.clear();
+                toast.success("Signed out successfully");
+                navigate({ to: "/auth" });
+              }}
+            >
+              Sign out
+            </Button>
           </div>
         </div>
       </header>

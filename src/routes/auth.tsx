@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -45,10 +46,17 @@ type Mode = "signin" | "forgot" | "reset-sent";
 
 function AuthPage() {
   const navigate = useNavigate();
+  const session = useSession();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (session) {
+      navigate({ to: "/" });
+    }
+  }, [session, navigate]);
 
   // ── Sign In ──────────────────────────────────────────────────────────────
   const handleSignIn = async () => {
@@ -205,14 +213,6 @@ function AuthPage() {
           </>
         )}
 
-        {/* Back to timetable (always visible) */}
-        <button
-          type="button"
-          className="w-full text-xs text-muted-foreground underline hover:text-foreground transition-colors"
-          onClick={() => navigate({ to: "/" })}
-        >
-          ← Back to timetable (view only)
-        </button>
       </div>
     </main>
   );
