@@ -28,14 +28,15 @@ export const Route = createFileRoute("/auth")({
 });
 
 // ── Allowlist ──────────────────────────────────────────────────────────────
-// Only these two emails are permitted to sign in and make changes.
-const ALLOWED_EMAILS: string[] = [
-  (import.meta.env["VITE_ADMIN_EMAIL_1"] as string | undefined ?? "").toLowerCase().trim(),
-  (import.meta.env["VITE_ADMIN_EMAIL_2"] as string | undefined ?? "").toLowerCase().trim(),
-].filter(Boolean);
+// Only these two admin emails are permitted to sign in and make changes.
+// Email addresses are not secrets — hardcoded for reliability.
+const ALLOWED_EMAILS = new Set([
+  "sssarabsoni@gmail.com",
+  "higgiepiggie001@gmail.com",
+]);
 
 function isAllowed(email: string): boolean {
-  return ALLOWED_EMAILS.includes(email.toLowerCase().trim());
+  return ALLOWED_EMAILS.has(email.toLowerCase().trim());
 }
 
 // ──────────────────────────────────────────────────────────────────────────
