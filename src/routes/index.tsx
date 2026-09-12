@@ -362,7 +362,7 @@ function DayBoard({
       // Run all pending draft saves in parallel
       await Promise.all(
         Object.entries(drafts).map(async ([key, subId]) => {
-          const [period, absentId] = key.split("|");
+          const [period, absentId] = key.split("|") as [string, string];
           const slot = slotMap.get(slotKey(absentId, day, period));
           const base = {
             day,
@@ -858,16 +858,17 @@ function AdjustmentHistory() {
   });
 
   // Group entries by their timetable day (e.g. "Monday", "Tuesday"…)
+  type HistoryRow = NonNullable<typeof history>[number];
   const grouped = useMemo(() => {
-    const map = new Map<string, typeof history>();
+    const map = new Map<string, HistoryRow[]>();
     for (const h of history ?? []) {
       if (!map.has(h.day)) map.set(h.day, []);
       map.get(h.day)!.push(h);
     }
     // Sort days by most recent entry within each group
     return Array.from(map.entries()).sort(([, aEntries], [, bEntries]) => {
-      const aLatest = new Date(aEntries![0].created_at).getTime();
-      const bLatest = new Date(bEntries![0].created_at).getTime();
+      const aLatest = new Date(aEntries[0]?.created_at ?? 0).getTime();
+      const bLatest = new Date(bEntries[0]?.created_at ?? 0).getTime();
       return bLatest - aLatest;
     });
   }, [history]);
