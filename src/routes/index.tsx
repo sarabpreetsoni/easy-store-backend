@@ -573,6 +573,19 @@ function StaffDialog({
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
 
+  // id of the teacher currently being edited (null = none)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSubject, setEditSubject] = useState("");
+
+  const startEdit = (t: TimetableData["teachers"][number]) => {
+    setEditingId(t.id);
+    setEditName(t.name);
+    setEditSubject(t.default_subject ?? "");
+  };
+  const cancelEdit = () => setEditingId(null);
+
+  // ── Add teacher ────────────────────────────────────────────────────────
   const addTeacher = useMutation({
     mutationFn: async () => {
       await requireSignedIn();
@@ -605,6 +618,26 @@ function StaffDialog({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // ── Edit teacher name / subject ────────────────────────────────────────
+  const editTeacher = useMutation({
+    mutationFn: async () => {
+      await requireSignedIn();
+      if (!editName.trim()) throw new Error("Name cannot be empty.");
+      const { error } = await supabase
+        .from("teachers")
+        .update({ name: editName.trim(), default_subject: editSubject.trim() })
+        .eq("id", editingId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditingId(null);
+      toast.success("Teacher updated");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // ── Remove teacher ─────────────────────────────────────────────────────
   const removeTeacher = useMutation({
     mutationFn: async (id: string) => {
       await requireSignedIn();
@@ -624,7 +657,10 @@ function StaffDialog({
         <DialogHeader>
           <DialogTitle className="font-display">Staff Directory</DialogTitle>
         </DialogHeader>
-        <div className="space-y-2">
+
+        {/* ── Add new teacher ── */}
+        <div className="space-y-2 rounded-xl border border-border p-3">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Add new teacher</p>
           <Input
             placeholder="Teacher name"
             value={name}
@@ -640,28 +676,80 @@ function StaffDialog({
             onClick={() => addTeacher.mutate()}
             disabled={addTeacher.isPending}
           >
-            Add teacher
+            {addTeacher.isPending ? "Adding…" : "Add teacher"}
           </Button>
         </div>
+
+        {/* ── Teacher list ── */}
         <div className="space-y-2">
           {data.teachers.map((t) => (
             <div
               key={t.id}
-              className="flex items-center justify-between rounded-xl border border-border p-3"
+              className="rounded-xl border border-border overflow-hidden"
             >
-              <div>
-                <p className="text-sm font-bold">{t.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t.default_subject || "No subject"}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => removeTeacher.mutate(t.id)}
-              >
-                Delete
-              </Button>
+              {editingId === t.id ? (
+                /* ── Inline edit mode ── */
+                <div className="space-y-2 p-3 bg-muted/40">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
+                    Editing — {t.name}
+                  </p>
+                  <Input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Teacher name"
+                  />
+                  <Input
+                    value={editSubject}
+                    onChange={(e) => setEditSubject(e.target.value)}
+                    placeholder="Default subject"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => editTeacher.mutate()}
+                      disabled={editTeacher.isPending}
+                    >
+                      {editTeacher.isPending ? "Saving…" : "✓ Save changes"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={cancelEdit}
+                      disabled={editTeacher.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* ── Normal row ── */
+                <div className="flex items-center justify-between p-3">
+                  <div>
+                    <p className="text-sm font-bold">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.default_subject || "No subject set"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => startEdit(t)}
+                    >
+                      ✏️ Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => removeTeacher.mutate(t.id)}
+                      disabled={removeTeacher.isPending}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -669,6 +757,7 @@ function StaffDialog({
     </Dialog>
   );
 }
+
 
 function ScheduleEditor({
   teacherId,
